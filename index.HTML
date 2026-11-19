@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>총괄평가 성취수준(A·B·C·D) 채점 · 피드백 및 통계 시스템</title>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -478,6 +479,7 @@
     }
     .student-link:hover { color: var(--primary-dark); }
 
+    /* 모달 팝업 */
     .modal-backdrop {
       display: none;
       position: fixed;
@@ -551,6 +553,86 @@
       text-align: left;
     }
 
+    /* QR 코드 영역 */
+    .qr-result-box {
+      margin-top: 12px;
+      padding: 16px;
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      background: var(--gray-50);
+      display: none;
+    }
+    .qr-result-box.active {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      align-items: center;
+    }
+    #qrcodeCanvasWrap {
+      background: #ffffff;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--gray-200);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 190px;
+      min-height: 190px;
+    }
+
+    /* 모바일 조회 전용 화면 */
+    .mobile-viewer-wrap {
+      max-width: 680px;
+      margin: 16px auto 50px;
+      padding: 0 14px;
+      display: none;
+    }
+    .mobile-viewer-wrap.active {
+      display: block;
+    }
+    .mobile-search-input {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 1rem;
+      border: 2px solid var(--primary);
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .mobile-student-chip-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .mobile-stu-btn {
+      padding: 10px 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      border-radius: 8px;
+      border: 1px solid var(--gray-300);
+      background: #ffffff;
+      color: var(--gray-900);
+    }
+    .mobile-stu-btn.selected {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+    .mobile-detail-card {
+      background: #ffffff;
+      border: 2px solid var(--primary);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .mobile-subj-box {
+      padding: 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      background: var(--gray-50);
+      margin-bottom: 10px;
+    }
+
     .toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -592,18 +674,45 @@
     <div class="header-sub">
       <span class="maker-badge">만든 사람 : 은두리</span>
       <span id="roleStatusBadge" class="role-pill">역할 미선택</span>
-      <span>문항정보표 · 피드백 자동 조합 · 미응시/전학 통계 · 메일머지 추출</span>
+      <span>문항정보표 · 피드백 자동 조합 · 미응시/전학 통계 · 모바일 QR 조회</span>
     </div>
   </div>
-  <div class="header-actions">
+  <div class="header-actions" id="desktopHeaderActions">
     <button onclick="openRoleGate()">🔄 대표/비대표 선택</button>
     <button id="headerDownloadCriteriaBtn" class="btn-primary" onclick="downloadCriteriaJSON()" style="display:none;">📤 기준 설정 다운로드</button>
+    <button class="btn-success" onclick="openQrGeneratorFromAny()">📱 모바일 조회용 QR</button>
     <button onclick="exportBackupJSON()">💾 전체 백업</button>
     <button onclick="document.getElementById('backupFileInput').click()">📂 백업 불러오기</button>
     <input type="file" id="backupFileInput" class="file-input-hidden" accept=".json" onchange="importBackupJSON(event)" />
     <button class="btn-danger" onclick="resetAllData()">🗑️ 전체 초기화</button>
   </div>
 </header>
+
+<!-- 모바일 QR 링크 접속 시 전용 조회 화면 -->
+<section id="mobileViewerSection" class="mobile-viewer-wrap">
+  <div class="card">
+    <div class="card-header">
+      <h2>📱 모바일 성적·오답·통계 조회</h2>
+      <span class="maker-badge">만든 사람 : 은두리</span>
+    </div>
+    <p class="card-desc">학생 이름을 누르면 과목별 점수·등급·틀린 문항·피드백이 바로 표시됩니다.</p>
+
+    <div class="sub-tabs">
+      <button class="sub-tab-btn active" id="mTabStudentBtn" onclick="switchMobileViewTab('student')">학생별 조회</button>
+      <button class="sub-tab-btn" id="mTabStatsBtn" onclick="switchMobileViewTab('stats')">과목별 통계</button>
+    </div>
+
+    <div id="mobileStudentView">
+      <input type="text" id="mobileSearchInput" class="mobile-search-input" placeholder="이름 또는 번호로 검색 (예: 민준, 3)" oninput="renderMobileStudentChips()" />
+      <div class="mobile-student-chip-grid" id="mobileStudentChips"></div>
+      <div id="mobileSelectedStudentDetail"></div>
+    </div>
+
+    <div id="mobileStatsView" style="display:none;">
+      <div id="mobileStatsCards"></div>
+    </div>
+  </div>
+</section>
 
 <!-- 첫 진입 대표 여부 선택 화면 -->
 <section id="roleGateSection" class="role-gate-wrap">
@@ -654,7 +763,7 @@
     <button class="tab-btn active" data-tab="tab1" onclick="switchTab('tab1')">1단계. 과목 · 문항 수 · 피드백 · 성취율 설정</button>
     <button class="tab-btn" data-tab="tab2" onclick="switchTab('tab2')">2단계. 명단 · 문항정보표 · 피드백 관리</button>
     <button class="tab-btn" data-tab="tab3" onclick="switchTab('tab3')">3단계. 문항별 채점 입력</button>
-    <button class="tab-btn" data-tab="tab4" onclick="switchTab('tab4')">4단계. 종합 결과 · 통계 · 엑셀 추출</button>
+    <button class="tab-btn" data-tab="tab4" onclick="switchTab('tab4')">4단계. 종합 결과 · 통계 · 엑셀 · QR</button>
   </nav>
 
   <!-- ==================== 1단계: 기본 설정 ==================== -->
@@ -754,7 +863,6 @@
       <div id="qEditorTableContainer"></div>
     </div>
 
-    <!-- 피드백 양식 관리 (피드백 O 선택 시에만 표시) -->
     <div class="card" id="feedbackSetupCard" style="display:none;">
       <div class="card-header">
         <h2>2-2. 과목별·문항별 피드백 양식 다운로드 및 업로드 (과목별 시트 분리형)</h2>
@@ -772,7 +880,6 @@
       <div id="fbEditorTableContainer"></div>
     </div>
 
-    <!-- 학생 명단 관리 -->
     <div class="card">
       <div class="card-header">
         <h2 id="studentCardTitle">2-2. 학생 명단 양식 다운로드(기본 30명) · 업로드 · 응시/미응시/전학 관리</h2>
@@ -839,11 +946,11 @@
     </div>
   </section>
 
-  <!-- ==================== 4단계: 종합 결과 · 통계 · 엑셀 추출 ==================== -->
+  <!-- ==================== 4단계: 종합 결과 · 통계 · 엑셀 · QR ==================== -->
   <section id="tab4" class="tab-panel">
     <div class="card">
       <div class="card-header">
-        <h2>4-1. 메일머지용 &amp; 성취수준(A·B·C·D) 통계 엑셀 추출</h2>
+        <h2>4-1. 메일머지용 · 성취수준(A·B·C·D) 통계 엑셀 추출 &amp; 모바일 조회용 QR</h2>
       </div>
       <div class="toolbar">
         <div class="toolbar-group">
@@ -859,6 +966,22 @@
         <div class="toolbar-group">
           <button class="btn-primary" onclick="exportMailMergeExcel()">📄 메일머지용 엑셀 다운로드 (.xlsx)</button>
           <button class="btn-success" onclick="exportStatsExcel()">📊 A·B·C·D 통계 엑셀 다운로드 (.xlsx)</button>
+          <button class="btn-primary" onclick="generateMobileLookupQR()">📱 모바일 조회용 QR 만들기</button>
+        </div>
+      </div>
+
+      <div id="qrResultBox" class="qr-result-box">
+        <div id="qrcodeCanvasWrap"></div>
+        <div style="flex:1; min-width:240px;">
+          <h3 style="margin:0 0 6px; font-size:1rem;">📱 스마트폰으로 스캔하거나 링크를 열어 조회하세요</h3>
+          <p style="margin:0 0 8px; font-size:0.84rem; color:var(--gray-700);">
+            외부 서버 없이 링크 주소에 조회용 데이터가 담깁니다. 폰에서 열면 파일 업로드 없이 바로 <strong>통계</strong>와 <strong>학생별 점수·틀린 문항·피드백</strong>을 볼 수 있습니다.
+          </p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <button class="btn-sm btn-primary" onclick="copyLookupUrl()">🔗 조회 링크 복사</button>
+            <a id="directLookupLink" href="#" target="_blank" class="btn btn-sm btn-success" style="text-decoration:none;">새 창에서 조회 화면 미리보기</a>
+          </div>
+          <div id="qrLengthNotice" class="helper-text"></div>
         </div>
       </div>
     </div>
@@ -867,7 +990,7 @@
       <div class="card-header">
         <h2>4-2. 과목별 성취수준(A·B·C·D) 통계 (응시자 기준 정수 비율 · 전학 제외 · 미응시 별도 집계)</h2>
       </div>
-      <p class="card-desc">등급 비율(%)은 <strong>실제 응시 인원</strong>을 분모로 산출하며, <strong>전학</strong> 학생은 통계 분모에서 제외됩니다.</p>
+      <p class="card-desc">등급 비율(%)은 <strong>실제 응시 인원</strong>을 분모로 산출되며, <strong>전학</strong> 학생은 통계 분모에서 제외됩니다.</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -926,9 +1049,8 @@
 
 <script>
   const SUBJECTS = ['국어', '수학', '사회', '과학', '영어'];
-  const STORAGE_KEY = 'summative_eval_app_v5';
+  const STORAGE_KEY = 'summative_eval_app_v6';
 
-  // status: 'active' | 'absentAll' | 'transferred'
   let state = {
     role: null,
     feedbackEnabled: false,
@@ -946,6 +1068,10 @@
     activeFbEditorSubject: '국어',
     activeGradingSubject: '국어'
   };
+
+  let mobileLookupData = null;
+  let selectedMobileStudentId = null;
+  let latestLookupUrl = '';
 
   function normalizeStudentStatus(stu) {
     if (stu.status === 'transferred' || stu.status === 'absentAll' || stu.status === 'active') {
@@ -982,7 +1108,44 @@
     }));
   }
 
+  // URL 해시에 담긴 모바일 조회용 데이터 파싱
+  function tryLoadMobileLookupFromHash() {
+    const h = window.location.hash || '';
+    if (!h.startsWith('#view=')) return false;
+    try {
+      const encoded = decodeURIComponent(h.slice(6));
+      const binStr = atob(encoded);
+      const bytes = new Uint8Array(binStr.length);
+      for (let i = 0; i < binStr.length; i++) {
+        bytes[i] = binStr.charCodeAt(i);
+      }
+      const jsonStr = new TextDecoder().decode(bytes);
+      const parsed = JSON.parse(jsonStr);
+      if (parsed && Array.isArray(parsed.students) && Array.isArray(parsed.stats)) {
+        mobileLookupData = parsed;
+        if (parsed.students.length > 0) {
+          selectedMobileStudentId = parsed.students[0].id;
+        }
+        return true;
+      }
+    } catch (err) {
+      console.error('모바일 조회 데이터 디코딩 실패:', err);
+    }
+    return false;
+  }
+
   function initApp() {
+    const isMobileLookup = tryLoadMobileLookupFromHash();
+    if (isMobileLookup) {
+      document.getElementById('roleGateSection').style.display = 'none';
+      document.getElementById('mainWorkspace').style.display = 'none';
+      document.getElementById('desktopHeaderActions').style.display = 'none';
+      document.getElementById('roleStatusBadge').textContent = '📱 모바일 조회 전용';
+      document.getElementById('mobileViewerSection').classList.add('active');
+      renderMobileViewer();
+      return;
+    }
+
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
@@ -1022,6 +1185,223 @@
 
   function saveState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  // ==================== 모바일 조회 전용 렌더링 ====================
+  function switchMobileViewTab(mode) {
+    document.getElementById('mTabStudentBtn').classList.toggle('active', mode === 'student');
+    document.getElementById('mTabStatsBtn').classList.toggle('active', mode === 'stats');
+    document.getElementById('mobileStudentView').style.display = mode === 'student' ? 'block' : 'none';
+    document.getElementById('mobileStatsView').style.display = mode === 'stats' ? 'block' : 'none';
+    if (mode === 'stats') renderMobileStatsCards();
+  }
+
+  function renderMobileViewer() {
+    renderMobileStudentChips();
+    renderMobileSelectedStudentDetail();
+    renderMobileStatsCards();
+  }
+
+  function renderMobileStudentChips() {
+    if (!mobileLookupData) return;
+    const kw = (document.getElementById('mobileSearchInput').value || '').trim().toLowerCase();
+    const list = mobileLookupData.students.filter(s => {
+      if (!kw) return true;
+      return String(s.num).includes(kw) || String(s.name).toLowerCase().includes(kw);
+    });
+
+    const wrap = document.getElementById('mobileStudentChips');
+    if (list.length === 0) {
+      wrap.innerHTML = `<div class="helper-text">검색 결과가 없습니다.</div>`;
+      return;
+    }
+
+    wrap.innerHTML = list.map(s => `
+      <button class="mobile-stu-btn ${selectedMobileStudentId === s.id ? 'selected' : ''}"
+        onclick="selectMobileStudent('${s.id}')">
+        ${s.num}번 ${escapeHtml(s.name)}
+      </button>
+    `).join('');
+  }
+
+  function selectMobileStudent(stuId) {
+    selectedMobileStudentId = stuId;
+    renderMobileStudentChips();
+    renderMobileSelectedStudentDetail();
+  }
+
+  function renderMobileSelectedStudentDetail() {
+    const box = document.getElementById('mobileSelectedStudentDetail');
+    if (!mobileLookupData) return;
+    const stu = mobileLookupData.students.find(s => s.id === selectedMobileStudentId) || mobileLookupData.students[0];
+    if (!stu) {
+      box.innerHTML = '';
+      return;
+    }
+
+    box.innerHTML = `
+      <div class="mobile-detail-card">
+        <div style="font-size:1.15rem; font-weight:800; margin-bottom:10px;">
+          📌 ${stu.num}번 ${escapeHtml(stu.name)}
+        </div>
+        ${stu.subjects.map(item => {
+          if (item.status === 'transferred') {
+            return `
+              <div class="mobile-subj-box">
+                <strong>${item.sub}</strong> : <span class="grade-badge grade-TR">전학</span>
+              </div>
+            `;
+          }
+          if (item.status === 'absent') {
+            return `
+              <div class="mobile-subj-box">
+                <strong>${item.sub}</strong> : <span class="grade-badge grade-NA">미응시</span>
+              </div>
+            `;
+          }
+          return `
+            <div class="mobile-subj-box">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <strong style="font-size:1rem;">${item.sub}</strong>
+                <span class="grade-badge grade-${item.grade}">${item.grade}등급 (${item.rate}%)</span>
+              </div>
+              <div style="font-size:0.95rem; font-weight:700; margin-bottom:4px;">
+                점수: ${item.score} / ${item.maxScore}점
+              </div>
+              <div style="font-size:0.86rem; color:var(--danger);">
+                틀린/감점 문항: ${item.wrongSummary && item.wrongSummary.length > 0 ? escapeHtml(item.wrongSummary.join(', ')) : '없음(만점)'}
+              </div>
+              ${item.feedback ? `
+                <div class="feedback-preview-box" style="margin-top:6px;">
+                  ${escapeHtml(item.feedback)}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderMobileStatsCards() {
+    if (!mobileLookupData) return;
+    const wrap = document.getElementById('mobileStatsCards');
+    wrap.innerHTML = mobileLookupData.stats.map(st => `
+      <div class="mobile-subj-box">
+        <div style="font-size:1rem; font-weight:800; margin-bottom:6px;">
+          ${st.sub} (만점 ${st.maxScore}점 · 응시 ${st.attended}명 · 평균 ${st.avg}점)
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; font-size:0.85rem;">
+          <span class="grade-badge grade-A">A ${st.counts.A}명(${st.rates.A}%)</span>
+          <span class="grade-badge grade-B">B ${st.counts.B}명(${st.rates.B}%)</span>
+          <span class="grade-badge grade-C">C ${st.counts.C}명(${st.rates.C}%)</span>
+          <span class="grade-badge grade-D">D ${st.counts.D}명(${st.rates.D}%)</span>
+        </div>
+        <div class="helper-text" style="margin-top:6px;">미응시 ${st.absent}명 · 전학 ${st.transferred}명</div>
+      </div>
+    `).join('');
+  }
+
+  // ==================== QR 생성 (외부 서버 없이 URL 해시에 압축 저장) ====================
+  function openQrGeneratorFromAny() {
+    if (!state.role) {
+      state.role = 'rep';
+      saveState();
+      updateRoleView();
+    }
+    switchTab('tab4');
+    generateMobileLookupQR();
+  }
+
+  function generateMobileLookupQR() {
+    const enabled = getEnabledSubjects();
+    const payload = {
+      stats: enabled.map(sub => computeSubjectStats(sub)),
+      students: state.students.map(stu => {
+        const stStatus = normalizeStudentStatus(stu);
+        return {
+          id: stu.id,
+          num: stu.num,
+          name: stu.name,
+          subjects: enabled.map(sub => {
+            const res = getStudentSubjectResult(stu, sub);
+            if (res.transferred) {
+              return { sub, status: 'transferred' };
+            }
+            if (res.absent) {
+              return { sub, status: 'absent' };
+            }
+            const qs = state.subjects[sub].questions;
+            const items = state.scores[stu.id]?.[sub]?.items || [];
+            const wrongSummary = [];
+            qs.forEach((q, idx) => {
+              const earned = Number(items[idx]) || 0;
+              if (earned === 0) wrongSummary.push(`${q.num}번(0점)`);
+              else if (earned < q.points) wrongSummary.push(`${q.num}번(${earned}/${q.points}점)`);
+            });
+            return {
+              sub,
+              status: 'ok',
+              score: res.score,
+              maxScore: res.maxScore,
+              rate: res.rate,
+              grade: res.grade,
+              wrongSummary,
+              feedback: state.feedbackEnabled ? getStudentSubjectFeedback(stu, sub) : ''
+            };
+          })
+        };
+      })
+    };
+
+    const jsonStr = JSON.stringify(payload);
+    const bytes = new TextEncoder().encode(jsonStr);
+    let binStr = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binStr += String.fromCharCode(bytes[i]);
+    }
+    const b64 = btoa(binStr);
+    const baseUrl = window.location.href.split('#')[0];
+    const fullUrl = `${baseUrl}#view=${encodeURIComponent(b64)}`;
+    latestLookupUrl = fullUrl;
+
+    const box = document.getElementById('qrResultBox');
+    box.classList.add('active');
+    document.getElementById('directLookupLink').href = fullUrl;
+
+    const qrWrap = document.getElementById('qrcodeCanvasWrap');
+    qrWrap.innerHTML = '';
+
+    const notice = document.getElementById('qrLengthNotice');
+    if (fullUrl.length > 2600) {
+      notice.style.color = 'var(--danger)';
+      notice.textContent = `※ 현재 링크 길이(${fullUrl.length}자)가 길어 QR 밀도가 높을 수 있습니다. 카메라 인식이 어렵다면 [조회 링크 복사]로 보내 열어보세요.`;
+    } else {
+      notice.style.color = 'var(--gray-500)';
+      notice.textContent = `링크 길이: ${fullUrl.length}자 · 스마트폰 카메라로 QR을 스캔해 바로 조회할 수 있습니다.`;
+    }
+
+    if (typeof QRCode !== 'undefined') {
+      try {
+        new QRCode(qrWrap, {
+          text: fullUrl,
+          width: 176,
+          height: 176,
+          correctLevel: QRCode.CorrectLevel.L
+        });
+      } catch (e) {
+        qrWrap.innerHTML = `<span class="helper-text">데이터가 많아 QR 도형 생성을 생략했습니다. 아래 [조회 링크 복사]를 이용해 주세요.</span>`;
+      }
+    }
+  }
+
+  function copyLookupUrl() {
+    if (!latestLookupUrl) return;
+    navigator.clipboard?.writeText(latestLookupUrl).then(() => {
+      alert('모바일 조회용 링크가 복사되었습니다!');
+    }).catch(() => {
+      prompt('아래 링크를 복사해 주세요:', latestLookupUrl);
+    });
   }
 
   // ==================== 대표 / 비대표 역할 분기 및 기준 파일 공유 ====================
@@ -1200,7 +1580,6 @@
     return SUBJECTS.filter(s => state.subjects[s].enabled);
   }
 
-  // 과목별 총점 및 서논술형 비율(1단위 정수)
   function getSubjectComposition(sub) {
     const qs = state.subjects[sub].questions;
     const totalCount = qs.length;
@@ -1382,7 +1761,6 @@
       </div>
     `;
 
-    // 2-2. 피드백 설정 카드
     const fbCard = document.getElementById('feedbackSetupCard');
     const studentTitle = document.getElementById('studentCardTitle');
     if (state.feedbackEnabled) {
@@ -1453,7 +1831,6 @@
       studentTitle.textContent = '2-2. 학생 명단 양식 다운로드(기본 30명) · 업로드 · 응시/미응시/전학 관리';
     }
 
-    // 학생 명단 테이블 (응시 / 미응시 / 전학 선택 가능)
     const sBody = document.getElementById('studentListBody');
     sBody.innerHTML = state.students.map((stu, idx) => {
       const st = normalizeStudentStatus(stu);
@@ -1679,7 +2056,6 @@
     reader.readAsArrayBuffer(file);
   }
 
-  // 학생 명단 양식 다운로드: 기본 30행(1~30번) + 미응시/전학 예시 안내
   function downloadStudentTemplate() {
     const wb = XLSX.utils.book_new();
     const rows = [['번호', '이름', '응시여부']];
@@ -1702,7 +2078,6 @@
     XLSX.writeFile(wb, '총괄평가_학생명단_양식_30명.xlsx');
   }
 
-  // 학생 명단 업로드: 응시 / 미응시 / 전학 반영
   function uploadStudentTemplate(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1725,7 +2100,6 @@
           const isAbsent = statusStr.includes('미응시') || statusStr.includes('안봄') || statusStr.includes('결시');
 
           let name = String(row['이름'] ?? row['성명'] ?? '').trim();
-          // 전학인 경우 이름이 비어 있어도 번호가 있으면 '전학'으로 등록 가능
           if (!name && isTransfer && rawNum && !isNaN(Number(rawNum))) {
             name = '전학';
           }
@@ -1797,7 +2171,7 @@
     renderAll();
   }
 
-  // ==================== 성적 및 피드백 계산 (1단위 정수 % · 전학/미응시 반영) ====================
+  // ==================== 성적 및 피드백 계산 ====================
   function calcGrade(rate) {
     if (rate >= state.cutlines.A) return 'A';
     if (rate >= state.cutlines.B) return 'B';
@@ -2060,7 +2434,6 @@
   }
 
   // ==================== 4단계: 통계 · 종합 일람표 · 상세 모달 ====================
-  // 전학 제외 재적, 응시인원 기준 1단위 정수 비율 계산
   function computeSubjectStats(sub) {
     const qs = state.subjects[sub].questions;
     const maxScore = Math.round(qs.reduce((a, q) => a + q.points, 0) * 10) / 10;
@@ -2083,7 +2456,7 @@
       }
     });
 
-    const enrolled = attended + absent; // 전학 제외 재적 인원
+    const enrolled = attended + absent;
     const avg = attended > 0 ? Math.round(scoreSum / attended) : 0;
     const pct = (cnt) => attended > 0 ? Math.round((cnt / attended) * 100) : 0;
 
@@ -2374,6 +2747,10 @@
   }
 
   function renderAll() {
+    if (mobileLookupData) {
+      renderMobileViewer();
+      return;
+    }
     renderStep1();
     renderStep2();
     renderStep3();
